@@ -262,6 +262,12 @@
         <input class="form-control mb-2" id="otSub">
         <label class="form-label">ติดต่อได้ที่</label>
         <input class="form-control mb-2" id="otContact" placeholder="เบอร์โทรระหว่างออกนอกโรงเรียน">
+        <label class="form-label">เอกสารแนบ <span class="text-muted" style="font-weight:400">(ไม่บังคับ)</span></label>
+        <div class="upload-wrap">
+          <input type="file" class="form-control mb-1" id="otAttach" accept="image/*,application/pdf">
+          <div class="upload-status" id="otAttachStatus"></div>
+        </div>
+        <input type="hidden" id="otAttachId">
         <button class="btn btn-accent w-100 mt-2" id="btnSubmitOuting">ยื่นคำขอ</button>
       </div>
 
@@ -422,11 +428,46 @@
     $('#btnOpenProfile').on('click', openProfileSheet);
 
     $('#btnSubmitOuting').on('click', submitOuting);
+    $('#otAttach').on('change', uploadOutingAttach);
     $('#otMulti').on('change', function(){
       $('#otEndBox').toggleClass('hidden', !this.checked);
       if(!this.checked) $('#otEnd').val('');
     });
   });
+
+  /** แนบเอกสารประกอบคำขอออกนอกโรงเรียน (เช่น หนังสือเชิญ / คำสั่งไปราชการ) */
+  function uploadOutingAttach(ev){
+    var file = ev.target.files[0];
+    if(!file){ $('#otAttachId').val(''); $('#otAttachStatus').text(''); return; }
+    if(file.size > 5*1024*1024){
+      toast('error','ไฟล์ใหญ่เกิน 5MB');
+      ev.target.value = ''; $('#otAttachId').val(''); $('#otAttachStatus').text('');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var base64 = e.target.result.split(',')[1];
+      $('#otAttachStatus').text('กำลังอัปโหลด...');
+      $('#btnSubmitOuting').prop('disabled', true);
+      api('liffUploadAttachment', LF.userId, base64, file.name, file.type).then(function(r){
+        $('#btnSubmitOuting').prop('disabled', false);
+        if(r.status === 'success'){
+          $('#otAttachId').val(r.file_id);
+          $('#otAttachStatus').text('แนบไฟล์แล้ว: ' + file.name);
+        } else {
+          $('#otAttachId').val('');
+          $('#otAttachStatus').text('อัปโหลดไม่สำเร็จ');
+          toast('error', r.message || 'อัปโหลดไม่สำเร็จ');
+        }
+      }).catch(function(){
+        $('#btnSubmitOuting').prop('disabled', false);
+        $('#otAttachId').val('');
+        $('#otAttachStatus').text('อัปโหลดไม่สำเร็จ');
+        toast('error','อัปโหลดไม่สำเร็จ');
+      });
+    };
+    reader.readAsDataURL(file);
+  }
 
   /* ── ขออนุญาตออกนอกบริเวณโรงเรียน ── */
   function prefillOutingForm(){
@@ -438,7 +479,9 @@
 
   function submitOuting(){
     prefillOutingForm();
+    var attachId = $('#otAttachId').val();
     var obj = {
+      attachment_file_ids: attachId ? [attachId] : [],
       start_date: $('#otStart').val(),
       end_date: $('#otMulti').is(':checked') ? $('#otEnd').val() : $('#otStart').val(),
       start_time: $('#otStartTime').val(),
@@ -458,6 +501,7 @@
       Swal.fire({ icon:'success', title:'ยื่นคำขอแล้ว', text:'เลขที่ ' + r.request_no, timer:2200, showConfirmButton:false });
       $('#otReason,#otDest,#otSub,#otContact').val('');
       $('#otMulti').prop('checked', false); $('#otEndBox').addClass('hidden'); $('#otEnd').val('');
+      $('#otAttach').val(''); $('#otAttachId').val(''); $('#otAttachStatus').text('');
       loadOutingHistory();
     }).catch(function(err){
       setBtnLoading('#btnSubmitOuting', false);
@@ -484,6 +528,12 @@
           + '<div class="small text-muted">' + when + '\x3c/div>'
           + '<div class="small text-muted">' + esc(d.reason || '') + '\x3c/div>'
           + '<div class="small text-muted">เลขที่ ' + esc(d.request_no) + (d.substitute ? ' · ผู้สอนแทน ' + esc(d.substitute) : '') + '\x3c/div>'
+          + ((d.attachment_file_ids || []).length
+              ? '<div class="small mt-1">' + d.attachment_file_ids.map(function(fid){
+                  return '<a href="https://drive.google.com/file/d/' + fid + '/view" target="_blank" rel="noopener">'
+                       + '<i class="fi fi-rr-clip me-1">\x3c/i>เอกสารแนบ\x3c/a>';
+                }).join(' · ') + '\x3c/div>'
+              : '')
           + '\x3c/div>';
       });
       $('#otList').html(h);
