@@ -70,8 +70,11 @@
     .hist-card .no{ font-size:.74rem; color:var(--muted); }
 
     /* ── Tabbar ── */
-    .tabbar{ position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); display:flex; padding:6px 0 calc(6px + env(safe-area-inset-bottom)); }
-    .tabbar button{ flex:1; background:none; border:0; color:var(--muted); font-size:.72rem; padding:6px 0; display:flex; flex-direction:column; align-items:center; gap:3px; }
+    /* เกิน 6 แท็บแล้วเบียดกันบนจอมือถือ จึงให้เลื่อนแนวนอนได้แทนการบีบทุกปุ่มให้เล็กลง */
+    .tabbar{ position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line);
+             display:flex; overflow-x:auto; -webkit-overflow-scrolling:touch;
+             padding:6px 0 calc(6px + env(safe-area-inset-bottom)); }
+    .tabbar button{ flex:0 0 auto; min-width:64px; background:none; border:0; color:var(--muted); font-size:.72rem; padding:6px 8px; display:flex; flex-direction:column; align-items:center; gap:3px; }
     .tabbar button i{ font-size:19px; }
     .tabbar button.on{ color:var(--brand); }
 
@@ -275,6 +278,51 @@
       <div id="otList"></div>
     </div>
 
+    <!-- ไปราชการ -->
+    <div class="lf-body tab-pane hidden" id="tab-official">
+      <div class="card-soft">
+        <h6 class="mb-3">ไปราชการ (อบรม / สัมมนา / ประชุม / แข่งขัน)</h6>
+        <label class="form-label">ประเภท</label>
+        <select class="form-select mb-2" id="ofTripType">
+          <option value="">- เลือกประเภท -</option>
+          <option value="อบรม">อบรม</option>
+          <option value="สัมมนา">สัมมนา</option>
+          <option value="ประชุม">ประชุม</option>
+          <option value="แข่งขัน">แข่งขัน</option>
+          <option value="ศึกษาดูงาน">ศึกษาดูงาน</option>
+          <option value="อื่นๆ">อื่นๆ</option>
+        </select>
+        <label class="form-label">เรื่อง / หลักสูตร</label>
+        <input class="form-control mb-2" id="ofEventName" placeholder="เช่น อบรมเชิงปฏิบัติการการจัดการเรียนรู้เชิงรุก">
+        <label class="form-label">จัดโดย <span class="text-muted" style="font-weight:400">(ไม่บังคับ)</span></label>
+        <input class="form-control mb-2" id="ofOrganizer" placeholder="เช่น สพม.ประจวบคีรีขันธ์">
+        <label class="form-label">สถานที่</label>
+        <input class="form-control mb-2" id="ofDest" placeholder="เช่น โรงแรมประจวบแกรนด์">
+        <div class="row g-2">
+          <div class="col-6"><label class="form-label">วันที่เริ่ม</label><input type="date" class="form-control" id="ofStartDate"></div>
+          <div class="col-6"><label class="form-label">วันที่สิ้นสุด</label><input type="date" class="form-control" id="ofEndDate"></div>
+        </div>
+        <label class="form-label mt-2">พาหนะที่ใช้ <span class="text-muted" style="font-weight:400">(ไม่บังคับ)</span></label>
+        <input class="form-control mb-2" id="ofTransport" placeholder="เช่น รถยนต์ส่วนตัว">
+        <label class="form-label">ค่าใช้จ่าย <span class="text-muted" style="font-weight:400">(ไม่บังคับ)</span></label>
+        <input class="form-control mb-2" id="ofFunding" placeholder="เช่น เบิกจากต้นสังกัด">
+        <label class="form-label">ผู้สอนแทน / ผู้ปฏิบัติหน้าที่แทน <span class="text-muted" style="font-weight:400">(ไม่บังคับ)</span></label>
+        <input class="form-control mb-2" id="ofSub">
+        <label class="form-label">ติดต่อได้ที่ <span class="text-muted" style="font-weight:400">(ไม่บังคับ)</span></label>
+        <input class="form-control mb-2" id="ofContact">
+        <label class="form-label">เอกสารแนบ <span class="text-muted" style="font-weight:400">(ไม่บังคับ)</span></label>
+        <div class="upload-wrap">
+          <input type="file" class="form-control mb-1" id="ofAttach" accept="image/*,application/pdf">
+          <div class="upload-status" id="ofAttachStatus"></div>
+        </div>
+        <input type="hidden" id="ofAttachId">
+        <button class="btn btn-accent w-100 mt-2" id="btnSubmitOfficial">ยื่นคำขอ</button>
+      </div>
+
+      <h6 class="mt-3 mb-2">คำขอของฉัน</h6>
+      <div id="ofList"></div>
+    </div>
+
     <!-- ประวัติ -->
     <div class="lf-body tab-pane hidden" id="tab-history">
       <div class="filter-scroll" id="histFilter">
@@ -318,6 +366,7 @@
   <div class="tabbar hidden" id="tabbar">
     <button class="on" data-tab="new"><i class="fi fi-rr-add-document"></i>ยื่นลา</button>
     <button data-tab="outing"><i class="fi fi-rr-sign-out-alt"></i>ออกนอก</button>
+    <button data-tab="official"><i class="fi fi-rr-briefcase"></i>ไปราชการ</button>
     <button data-tab="history"><i class="fi fi-rr-time-past"></i>ประวัติ</button>
     <button data-tab="balance"><i class="fi fi-rr-calendar-check"></i>คงเหลือ</button>
     <button data-tab="stats"><i class="fi fi-rr-chart-pie-alt"></i>สถิติ</button>
@@ -433,6 +482,9 @@
       $('#otEndBox').toggleClass('hidden', !this.checked);
       if(!this.checked) $('#otEnd').val('');
     });
+
+    $('#btnSubmitOfficial').on('click', submitOfficial);
+    $('#ofAttach').on('change', uploadOfficialAttach);
   });
 
   /** แนบเอกสารประกอบคำขอออกนอกโรงเรียน (เช่น หนังสือเชิญ / คำสั่งไปราชการ) */
@@ -540,6 +592,112 @@
     }).catch(function(){ $('#otList').html('<div class="text-center text-muted py-3">โหลดข้อมูลไม่สำเร็จ\x3c/div>'); });
   }
 
+  /** แนบเอกสารประกอบคำขอไปราชการ (เช่น หนังสือเชิญ / โครงการ) */
+  function uploadOfficialAttach(ev){
+    var file = ev.target.files[0];
+    if(!file){ $('#ofAttachId').val(''); $('#ofAttachStatus').text(''); return; }
+    if(file.size > 5*1024*1024){
+      toast('error','ไฟล์ใหญ่เกิน 5MB');
+      ev.target.value = ''; $('#ofAttachId').val(''); $('#ofAttachStatus').text('');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var base64 = e.target.result.split(',')[1];
+      $('#ofAttachStatus').text('กำลังอัปโหลด...');
+      $('#btnSubmitOfficial').prop('disabled', true);
+      api('liffUploadAttachment', LF.userId, base64, file.name, file.type).then(function(r){
+        $('#btnSubmitOfficial').prop('disabled', false);
+        if(r.status === 'success'){
+          $('#ofAttachId').val(r.file_id);
+          $('#ofAttachStatus').text('แนบไฟล์แล้ว: ' + file.name);
+        } else {
+          $('#ofAttachId').val('');
+          $('#ofAttachStatus').text('อัปโหลดไม่สำเร็จ');
+          toast('error', r.message || 'อัปโหลดไม่สำเร็จ');
+        }
+      }).catch(function(){
+        $('#btnSubmitOfficial').prop('disabled', false);
+        $('#ofAttachId').val('');
+        $('#ofAttachStatus').text('อัปโหลดไม่สำเร็จ');
+        toast('error','อัปโหลดไม่สำเร็จ');
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /* ── ไปราชการ ── */
+  function prefillOfficialForm(){
+    var today = new Date().toISOString().substring(0, 10);
+    if(!$('#ofStartDate').val()) $('#ofStartDate').val(today);
+    if(!$('#ofEndDate').val()) $('#ofEndDate').val(today);
+  }
+
+  function submitOfficial(){
+    prefillOfficialForm();
+    var attachId = $('#ofAttachId').val();
+    var obj = {
+      attachment_file_ids: attachId ? [attachId] : [],
+      trip_type: $('#ofTripType').val(),
+      event_name: $('#ofEventName').val().trim(),
+      organizer: $('#ofOrganizer').val().trim(),
+      destination: $('#ofDest').val().trim(),
+      start_date: $('#ofStartDate').val(),
+      end_date: $('#ofEndDate').val(),
+      transportation: $('#ofTransport').val().trim(),
+      funding_source: $('#ofFunding').val().trim(),
+      substitute: $('#ofSub').val().trim(),
+      contact_during_leave: $('#ofContact').val().trim()
+    };
+    if(!obj.trip_type){ toast('error','กรุณาเลือกประเภทการไปราชการ'); return; }
+    if(!obj.event_name){ toast('error','กรุณาระบุเรื่อง/หลักสูตร'); return; }
+    if(!obj.destination){ toast('error','กรุณาระบุสถานที่'); return; }
+
+    setBtnLoading('#btnSubmitOfficial', true);
+    api('liffSubmitOfficialTrip', LF.userId, obj).then(function(r){
+      setBtnLoading('#btnSubmitOfficial', false);
+      if(r.status !== 'success'){ toast('error', r.message); return; }
+      Swal.fire({ icon:'success', title:'ยื่นคำขอแล้ว', text:'เลขที่ ' + r.request_no, timer:2200, showConfirmButton:false });
+      $('#ofTripType').val(''); $('#ofEventName,#ofOrganizer,#ofDest,#ofTransport,#ofFunding,#ofSub,#ofContact').val('');
+      $('#ofAttach').val(''); $('#ofAttachId').val(''); $('#ofAttachStatus').text('');
+      loadOfficialHistory();
+    }).catch(function(err){
+      setBtnLoading('#btnSubmitOfficial', false);
+      toast('error', err.message || 'ยื่นคำขอไม่สำเร็จ');
+    });
+  }
+
+  function loadOfficialHistory(){
+    prefillOfficialForm();
+    $('#ofList').html(skelCards(2));
+    api('liffGetOfficialTripHistory', LF.userId).then(function(r){
+      if(r.status !== 'success'){ $('#ofList').html('<div class="text-center text-muted py-3">' + esc(r.message||'') + '\x3c/div>'); return; }
+      if(!r.data.length){ $('#ofList').html('<div class="text-center text-muted py-3">ยังไม่มีคำขอ\x3c/div>'); return; }
+      var h = '';
+      r.data.forEach(function(d){
+        var st = ST[d.status] || [d.status, '#94a3b8'];
+        var when = fmtBE(d.start_date) + (d.start_date !== d.end_date ? ' - ' + fmtBE(d.end_date) : '')
+                 + ' · ' + (d.total_days || 0) + ' วัน';
+        h += '<div class="card-soft mb-2">'
+          + '<div style="display:flex;justify-content:space-between;gap:8px">'
+          +   '<b style="font-size:.9rem">' + esc(d.event_name || d.trip_type || '-') + '\x3c/b>'
+          +   '<span style="color:' + st[1] + ';font-size:.78rem;white-space:nowrap">' + st[0] + '\x3c/span>'
+          + '\x3c/div>'
+          + '<div class="small text-muted">' + when + '\x3c/div>'
+          + '<div class="small text-muted">' + esc(d.destination || '') + '\x3c/div>'
+          + '<div class="small text-muted">เลขที่ ' + esc(d.request_no) + (d.substitute ? ' · ผู้สอนแทน ' + esc(d.substitute) : '') + '\x3c/div>'
+          + ((d.attachment_file_ids || []).length
+              ? '<div class="small mt-1">' + d.attachment_file_ids.map(function(fid){
+                  return '<a href="https://drive.google.com/file/d/' + fid + '/view" target="_blank" rel="noopener">'
+                       + '<i class="fi fi-rr-clip me-1">\x3c/i>เอกสารแนบ\x3c/a>';
+                }).join(' · ') + '\x3c/div>'
+              : '')
+          + '\x3c/div>';
+      });
+      $('#ofList').html(h);
+    }).catch(function(){ $('#ofList').html('<div class="text-center text-muted py-3">โหลดข้อมูลไม่สำเร็จ\x3c/div>'); });
+  }
+
   function switchTab(t){
     $('.tabbar button').removeClass('on');
     $('.tabbar button[data-tab="' + t + '"]').addClass('on');
@@ -549,6 +707,7 @@
     if(t === 'stats') loadStats();
     if(t === 'holiday') loadHolidays();
     if(t === 'outing') loadOutingHistory();
+    if(t === 'official') loadOfficialHistory();
   }
 
   function initLiff(){
