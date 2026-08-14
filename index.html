@@ -184,9 +184,9 @@
     <div class="card-soft text-center">
       <i class="fi fi-rr-link-alt" style="font-size:40px;color:var(--brand)"></i>
       <h5 class="mt-2 mb-1">เชื่อมต่อบัญชี</h5>
-      <p class="text-muted small mb-3">กรอกรหัสพนักงานและเบอร์โทรเพื่อเริ่มใช้งาน</p>
+      <p class="text-muted small mb-3">กรอกรหัสบุคลากรและเบอร์โทรเพื่อเริ่มใช้งาน</p>
       <div class="text-start">
-        <label class="form-label">รหัสพนักงาน</label>
+        <label class="form-label">รหัสบุคลากร</label>
         <input class="form-control mb-2" id="linkCode" placeholder="เช่น EMP001">
         <label class="form-label">เบอร์โทรศัพท์</label>
         <input class="form-control mb-3" id="linkPhone" placeholder="08xxxxxxxx" inputmode="tel">
@@ -1308,7 +1308,7 @@
         + '<div style="flex:1">'
         + '<div style="font-size:.9rem;font-weight:500">' + esc(h.name) + '\x3c/div>'
         + '<div class="small" style="color:var(--muted);font-size:.74rem">'
-        + (h.type==='company'?'วันหยุดบริษัท':'วันหยุดราชการ')
+        + (h.type==='company'?'วันหยุดโรงเรียน':'วันหยุดราชการ')
         + (isToday?' · <b style="color:#ef4444">วันนี้\x3c/b>':'')
         + '\x3c/div>\x3c/div>\x3c/div>';
     });
@@ -1321,7 +1321,7 @@
     var p = iso.split('-');
     var html = '<h6 class="mb-2">' + Number(p[2]) + ' ' + TH_M[Number(p[1])-1] + ' ' + (Number(p[0]) + (LF.be?543:0)) + '\x3c/h6>';
     hs.forEach(function(h){
-      html += detRow('fi-rr-calendar-star', h.type==='company'?'วันหยุดบริษัท':'วันหยุดราชการ', h.name);
+      html += detRow('fi-rr-calendar-star', h.type==='company'?'วันหยุดโรงเรียน':'วันหยุดราชการ', h.name);
     });
     $('#sheetBody').html(html);
     $('#detailSheet').addClass('show');
