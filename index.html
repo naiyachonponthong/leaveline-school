@@ -342,6 +342,15 @@
       <div class="card-soft" id="balList"></div>
     </div>
 
+    <!-- อนุมัติ (แสดงเฉพาะผู้อนุมัติ) -->
+    <div class="lf-body tab-pane hidden" id="tab-approve">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">รายการรออนุมัติ</h6>
+        <button class="btn btn-sm" id="apReload" style="border:1px solid var(--line);border-radius:10px;font-size:.78rem"><i class="fi fi-rr-refresh me-1"></i>โหลดใหม่</button>
+      </div>
+      <div id="apList"></div>
+    </div>
+
     <!-- สถิติรายบุคคล -->
     <div class="lf-body tab-pane hidden" id="tab-stats">
       <div class="d-flex justify-content-between align-items-center mb-3">
@@ -367,6 +376,7 @@
     <button class="on" data-tab="new"><i class="fi fi-rr-add-document"></i>ยื่นลา</button>
     <button data-tab="outing"><i class="fi fi-rr-sign-out-alt"></i>ออกนอก</button>
     <button data-tab="official"><i class="fi fi-rr-briefcase"></i>ไปราชการ</button>
+    <button data-tab="approve" class="hidden" id="tabBtnApprove" style="position:relative"><i class="fi fi-rr-checkbox"></i>อนุมัติ<span class="hidden" id="apBadge" style="position:absolute;top:2px;right:18%;background:#ef4444;color:#fff;border-radius:9px;font-size:.62rem;line-height:1;padding:3px 5px;min-width:16px"></span></button>
     <button data-tab="history"><i class="fi fi-rr-time-past"></i>ประวัติ</button>
     <button data-tab="balance"><i class="fi fi-rr-calendar-check"></i>คงเหลือ</button>
     <button data-tab="stats"><i class="fi fi-rr-chart-pie-alt"></i>สถิติ</button>
@@ -393,11 +403,16 @@
 
   var GAS_URL = 'https://script.google.com/macros/s/AKfycbw-Dz-7LKc0fMXIMZXzC7RyHmlGAbofVDOVf4c5Jbn0aYNNmN4av9HomtJdna5Yd-lBEA/exec';
 
+  // access token ของ LINE — เซิร์ฟเวอร์ใช้ถาม LINE ว่าผู้เรียกเป็นใครจริง (ไม่เชื่อ userId ที่หน้านี้ส่งไปเอง)
+  function lineToken(){
+    try { return (window.liff && liff.getAccessToken && liff.getAccessToken()) || ''; } catch(e){ return ''; }
+  }
+
   function api(fn){
     var args = Array.prototype.slice.call(arguments, 1);
     return fetch(GAS_URL, {
       method: 'POST',
-      body: JSON.stringify({ fn: fn, args: args })
+      body: JSON.stringify({ fn: fn, args: args, token: lineToken() })
     }).then(function(r){
       return r.text().then(function(txt){
         try { return JSON.parse(txt); }
@@ -408,6 +423,14 @@
       });
     }).then(function(j){
       if(j && j.ok) return j.data;
+      // token หมดอายุ/ใช้ไม่ได้ — ให้ LINE ออก token ใหม่ด้วยการล็อกอินซ้ำ (ทำครั้งเดียว กันวนไม่จบ)
+      if(j && j.code === 'LINE_AUTH' && window.liff && !sessionStorage.getItem('lfRelogin')){
+        try {
+          sessionStorage.setItem('lfRelogin', '1');
+          if(liff.isLoggedIn()) liff.logout();
+          liff.login({ redirectUri: location.href });
+        } catch(e){}
+      }
       throw new Error(j && j.error ? j.error : 'API error');
     });
   }
@@ -453,6 +476,8 @@
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/\x3c/g,'&lt;').replace(/>/g,'&gt;'); }
   function toast(icon, t){ Swal.fire({ toast:true, position:'top', icon:icon, title:t, showConfirmButton:false, timer:2400 }); }
   var ST = { SUBMITTED:['รออนุมัติ','#f59e0b'], L1_APPROVED:['อยู่ระหว่างอนุมัติ','#0ea5e9'], APPROVED:['อนุมัติ','#10b981'], REJECTED:['ไม่อนุมัติ','#ef4444'], CANCELLED:['ยกเลิก','#94a3b8'] };
+
+  $(document).on('click', '#apReload', function(){ loadApprovals(); });
 
   $(document).ready(function(){
     initLiff();
@@ -702,6 +727,7 @@
     $('.tabbar button').removeClass('on');
     $('.tabbar button[data-tab="' + t + '"]').addClass('on');
     $('.tab-pane').addClass('hidden'); $('#tab-' + t).removeClass('hidden');
+    if(t === 'approve') loadApprovals();
     if(t === 'history') loadHistory();
     if(t === 'balance') loadBalances();
     if(t === 'stats') loadStats();
@@ -735,6 +761,7 @@
       }).then(function(profile){
         if(!profile) return;
         LF.userId = profile.userId;
+        try { sessionStorage.removeItem('lfRelogin'); } catch(e){}
         $('#lfSub').text(profile.displayName || '');
         $('#splashSub').text(profile.displayName || '');
         checkLink();
@@ -793,6 +820,164 @@
       $('#nlType').html(o);
       loadBalanceMap(onTypeChange);
     });
+
+    // เปิดจากลิงก์ที่ระบุแท็บมา (rich menu / ปุ่มในการ์ดอนุมัติ) เช่น ?tab=approve&id=...
+    var want = startParams();
+    loadApprovals(true).then(function(isApprover){
+      if(want.tab === 'approve' && isApprover){
+        switchTab('approve');
+        if(want.id) showApproval(want.id);
+      }
+    });
+    if(want.tab && want.tab !== 'approve' && /^[a-z]+$/.test(want.tab) && $('#tab-' + want.tab).length) switchTab(want.tab);
+  }
+
+  /* อ่าน ?tab=&id= จาก URL — ตอนเปิดผ่าน liff.line.me ค่าจะมาในพารามิเตอร์ liff.state ก่อน */
+  function startParams(){
+    var out = { tab:'', id:'' };
+    try {
+      var q = new URLSearchParams(location.search);
+      var state = q.get('liff.state');
+      if(state){ q = new URLSearchParams(state.indexOf('?') !== -1 ? state.substring(state.indexOf('?')) : state); }
+      out.tab = q.get('tab') || '';
+      out.id = q.get('id') || '';
+    } catch(e){}
+    return out;
+  }
+
+  /* ── อนุมัติ (เฉพาะผู้อนุมัติ) ── */
+  var LF_AP = [];
+  var AP_KIND = { LEAVE:['ใบลา','#3b3f9e'], OUTING:['ออกนอกโรงเรียน','#0e7490'], OFFICIAL:['ไปราชการ','#7c3aed'] };
+
+  function apWhen(d){
+    var t = fmtBE(d.start_date) + (d.start_date !== d.end_date ? ' - ' + fmtBE(d.end_date) : '');
+    if(d.start_half === 'hourly') t += ' (' + (d.start_time || '') + '-' + (d.end_time || '') + ' น.)';
+    else if(d.start_half === 'morning') t += ' (ครึ่งเช้า)';
+    else if(d.start_half === 'afternoon') t += ' (ครึ่งบ่าย)';
+    return t;
+  }
+  function apAmount(d){
+    return d.kind === 'OUTING' ? ((d.total_hours || 0) + ' ชม.') : ((d.total_days || 0) + ' วัน');
+  }
+
+  /* initial = โหลดเงียบๆ ตอนเปิดแอป เพื่อดูว่าเป็นผู้อนุมัติหรือไม่ (คืน true/false) */
+  function loadApprovals(initial){
+    if(!initial) $('#apList').html(skelCards(2));
+    return api('liffGetApprovalQueue', LF.userId).then(function(r){
+      if(!r || !r.approver) return false;
+      $('#tabBtnApprove').removeClass('hidden');
+      LF_AP = r.data || [];
+      if(LF_AP.length) $('#apBadge').text(LF_AP.length).removeClass('hidden'); else $('#apBadge').addClass('hidden');
+      renderApprovals();
+      return true;
+    }).catch(function(err){
+      if(!initial) $('#apList').html('<div class="text-center text-muted py-4">โหลดข้อมูลไม่สำเร็จ: ' + esc(String(err && err.message || err)) + '\x3c/div>');
+      return false;
+    });
+  }
+
+  function renderApprovals(){
+    if(!LF_AP.length){
+      $('#apList').html('<div class="text-center text-muted py-5"><i class="fi fi-rr-checkbox" style="font-size:1.6rem">\x3c/i><div class="mt-2">ไม่มีรายการรออนุมัติ\x3c/div>\x3c/div>');
+      return;
+    }
+    var h = '';
+    LF_AP.forEach(function(d, i){
+      var k = AP_KIND[d.kind] || AP_KIND.LEAVE;
+      var sub = d.kind === 'OUTING' ? d.destination : (d.kind === 'OFFICIAL' ? (d.event_name || d.destination) : d.reason);
+      h += '<div class="hist-card" style="cursor:pointer" data-ap="' + i + '">'
+        + '<div class="d-flex justify-content-between align-items-start">'
+        +   '<div><b>' + esc(d.employee_name) + '\x3c/b><div class="small text-muted">' + esc(d.department_name) + '\x3c/div>\x3c/div>'
+        +   '<span class="badge-st" style="background:' + k[1] + '22;color:' + k[1] + '">' + k[0] + '\x3c/span>'
+        + '\x3c/div>'
+        + '<div class="mt-2" style="font-size:.9rem">' + esc(d.leave_type_name) + ' · ' + esc(apAmount(d)) + '\x3c/div>'
+        + '<div class="small text-muted">' + esc(apWhen(d)) + '\x3c/div>'
+        + (sub ? '<div class="small text-muted text-truncate">' + esc(sub) + '\x3c/div>' : '')
+        + '<div class="d-flex justify-content-between mt-2 no"><span>' + esc(d.request_no) + (d.attach_count ? ' · <i class="fi fi-rr-clip">\x3c/i> ' + d.attach_count : '') + '\x3c/span>'
+        +   '<span>ขั้น ' + esc(d.waiting_level) + '/' + esc(d.level_total) + '\x3c/span>\x3c/div>'
+        + '\x3c/div>';
+    });
+    $('#apList').html(h);
+    $('#apList [data-ap]').on('click', function(){
+      var d = LF_AP[Number($(this).attr('data-ap'))];
+      if(d) showApproval(d.id);
+    });
+  }
+
+  function showApproval(id){
+    $('#sheetBody').html('<div class="text-center py-5"><div class="spinner-border" style="width:28px;height:28px;border-width:3px">\x3c/div>\x3c/div>');
+    $('#detailSheet').addClass('show');
+    api('liffGetApprovalDetail', LF.userId, id).then(function(r){
+      if(r.status !== 'success'){
+        $('#sheetBody').html('<div class="text-center text-muted py-4">' + esc(r.message || 'ไม่พบข้อมูล') + '\x3c/div>');
+        return;
+      }
+      var d = r.data, k = AP_KIND[d.kind] || AP_KIND.LEAVE;
+      var h = '<div class="d-flex justify-content-between align-items-center mb-1">'
+        + '<b style="font-size:1rem">' + esc(d.employee_name) + '\x3c/b>'
+        + '<span class="badge-st" style="background:' + k[1] + '22;color:' + k[1] + '">' + k[0] + '\x3c/span>\x3c/div>'
+        + '<div class="small text-muted mb-3" style="font-size:.76rem">' + esc(d.department_name) + ' · เลขที่ ' + esc(d.request_no)
+        + ' · รอ' + esc(d.waiting_role_label) + ' (ขั้น ' + esc(d.waiting_level) + '/' + esc(d.level_total) + ')\x3c/div>'
+        + detRow('fi-rr-document', 'ประเภท', d.leave_type_name + (d.trip_type ? ' (' + d.trip_type + ')' : ''))
+        + detRow('fi-rr-calendar', 'ช่วงวัน', apWhen(d) + ' · ' + apAmount(d));
+      if(d.event_name) h += detRow('fi-rr-briefcase', 'เรื่อง', d.event_name);
+      if(d.destination) h += detRow('fi-rr-marker', 'สถานที่', d.destination);
+      if(d.reason) h += detRow('fi-rr-memo', 'เหตุผล', d.reason);
+      if(d.substitute) h += detRow('fi-rr-users', 'ผู้สอนแทน', d.substitute);
+      if(d.contact_during_leave) h += detRow('fi-rr-phone-call', 'ติดต่อระหว่างลา', d.contact_during_leave);
+      if(d.remaining_after !== undefined) h += detRow('fi-rr-calendar-check', 'วันลาคงเหลือหลังใบนี้', d.remaining_after + ' วัน');
+      (d.approvals || []).forEach(function(a){
+        if(a.action !== 'approve') return;
+        h += detRow('fi-rr-check', 'ผ่านขั้น ' + a.level, a.approver_name + (a.comment ? ' — ' + a.comment : ''));
+      });
+      (d.attachments || []).forEach(function(a){
+        h += '<a href="' + encodeURI(a.url) + '" target="_blank" rel="noopener" class="d-flex align-items-center gap-2 mt-2 mb-1" '
+          + 'style="border:1px solid var(--brand);color:var(--brand);border-radius:10px;padding:8px 14px;font-size:.85rem;text-decoration:none">'
+          + '<i class="fi fi-rr-clip">\x3c/i>' + esc(a.name) + '\x3c/a>';
+      });
+      h += '<div class="d-flex gap-2 mt-3">'
+        + '<button class="btn flex-fill" id="apBtnNo" style="border:1px solid #ef4444;color:#ef4444;border-radius:10px">ไม่อนุมัติ\x3c/button>'
+        + '<button class="btn flex-fill" id="apBtnOk" style="background:var(--brand);color:#fff;border-radius:10px">อนุมัติ\x3c/button>'
+        + '\x3c/div>';
+      $('#sheetBody').html(h);
+      $('#apBtnOk').on('click', function(){ decideApproval(d, 'approve'); });
+      $('#apBtnNo').on('click', function(){ decideApproval(d, 'reject'); });
+    }).catch(function(err){
+      $('#sheetBody').html('<div class="text-center text-muted py-4">โหลดข้อมูลไม่สำเร็จ: ' + esc(String(err && err.message || err)) + '\x3c/div>');
+    });
+  }
+
+  function decideApproval(d, decision){
+    var reject = decision === 'reject';
+    closeSheet();
+    setTimeout(function(){
+      Swal.fire({
+        title: (reject ? 'ไม่อนุมัติ ' : 'อนุมัติ ') + d.request_no,
+        text: d.employee_name,
+        input: 'textarea',
+        inputPlaceholder: reject ? 'ระบุเหตุผล (จำเป็น)' : 'ความเห็น (ถ้ามี)',
+        inputAttributes: { maxlength: 500 },
+        showCancelButton: true,
+        confirmButtonText: reject ? 'ยืนยันไม่อนุมัติ' : 'ยืนยันอนุมัติ',
+        cancelButtonText: 'ย้อนกลับ',
+        confirmButtonColor: reject ? '#ef4444' : undefined,
+        showLoaderOnConfirm: true,
+        allowOutsideClick: function(){ return !Swal.isLoading(); },
+        preConfirm: function(v){
+          v = (v || '').trim();
+          if(reject && !v){ Swal.showValidationMessage('กรุณาระบุเหตุผล'); return false; }
+          return api('liffDecide', LF.userId, d.id, decision, v).then(function(r){
+            if(r.status !== 'success'){ Swal.showValidationMessage(r.message || 'ดำเนินการไม่สำเร็จ'); return false; }
+            return r;
+          }).catch(function(err){ Swal.showValidationMessage('ดำเนินการไม่สำเร็จ: ' + String(err && err.message || err)); return false; });
+        }
+      }).then(function(res){
+        if(res.isConfirmed && res.value){
+          toast('success', res.value.message || 'บันทึกแล้ว');
+          loadApprovals();
+        }
+      });
+    }, 220);
   }
 
   function loadBalanceMap(cb){
@@ -982,7 +1167,7 @@
     list.forEach(function(d){
       var st = ST[d.status] || [d.status,'#94a3b8'];
       var range = fmtBE(d.start_date) + (d.start_date !== d.end_date ? ' - ' + fmtBE(d.end_date) : '');
-      if(d.start_half === 'hourly'){ range += ' (' + (d.start_time || '') + '-' + (d.end_time || '') + ' น.)'; }
+      if(d.start_half === 'hourly'){ range += ' (' + esc(d.start_time || '') + '-' + esc(d.end_time || '') + ' น.)'; }
       html += '<div class="hist-card" style="cursor:pointer" onclick="showDetail(\'' + d.id + '\')">'
         + '<div class="d-flex justify-content-between align-items-start">'
         + '<div><b>' + esc(d.leave_type_name) + '\x3c/b><div class="no">' + esc(d.request_no) + '\x3c/div>\x3c/div>'
@@ -1067,7 +1252,7 @@
   function buildDetailHtml(d, slim){
     var st = ST[d.status] || [d.status,'#94a3b8'];
     var range = fmtBE(d.start_date) + (d.start_date !== d.end_date ? ' - ' + fmtBE(d.end_date) : '');
-    var modeLabel = d.start_half === 'morning' ? 'ครึ่งวันเช้า' : (d.start_half === 'afternoon' ? 'ครึ่งวันบ่าย' : (d.start_half === 'hourly' ? 'รายชั่วโมง (' + (d.start_time || '') + '-' + (d.end_time || '') + ' น.)' : 'เต็มวัน'));
+    var modeLabel = d.start_half === 'morning' ? 'ครึ่งวันเช้า' : (d.start_half === 'afternoon' ? 'ครึ่งวันบ่าย' : (d.start_half === 'hourly' ? 'รายชั่วโมง (' + esc(d.start_time || '') + '-' + esc(d.end_time || '') + ' น.)' : 'เต็มวัน'));
     var h = '<div class="d-flex justify-content-between align-items-center mb-2">'
       + '<b style="font-size:1rem">' + esc(d.leave_type_name) + '\x3c/b>'
       + '<span class="badge-st" style="background:' + st[1] + '22;color:' + st[1] + '">' + st[0] + '\x3c/span>\x3c/div>'
